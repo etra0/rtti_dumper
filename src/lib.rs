@@ -1,12 +1,11 @@
-use memory_rs::internal::memory::scan_aob_all_matches;
+use memory_rs::internal::memory::{scan_aob_all_matches, scan_aligned_value};
 use memory_rs::internal::process_info::ProcessInfo;
 use memory_rs::try_winapi;
+use std::convert::TryInto;
 use std::ffi::{CStr, CString};
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicUsize;
-use std::sync::Arc;
-use std::{convert::TryInto, sync::atomic::Ordering, sync::Mutex};
+use std::sync::{atomic::AtomicUsize, Arc, atomic::Ordering, Mutex};
 use winapi::shared::minwindef::LPVOID;
 use winapi::um::consoleapi::AllocConsole;
 use winapi::um::libloaderapi::{self, FreeLibraryAndExitThread};
@@ -15,9 +14,16 @@ use winapi::um::winuser::MessageBoxA;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+/// This struct will contain the basic information about the RTTI when 
+/// the scan_aob gets a match.
 struct RTTIMatch {
+    /// Name of the RTTI.
     name: String,
+
+    /// Address of the RTTI information. (*(name - 0x10))
     addr: usize,
+
+    /// Possible matches containing the rtti information
     possible_matches: Vec<usize>,
 }
 
@@ -133,10 +139,7 @@ fn get_rtti_values(lib: LPVOID) -> Result<()> {
                 };
 
                 let relative_rtti_info: u32 = (*a - 0x10 - base_addr).try_into().unwrap();
-                let relative_rtti_info_aob: [u8; 4] =
-                    unsafe { std::mem::transmute(relative_rtti_info) };
-                let lambda = move |x: &[u8]| -> bool { x == relative_rtti_info_aob };
-                let matches = scan_aob_all_matches(base_addr, exec_size, lambda, 4).unwrap();
+                let matches = scan_aligned_value(base_addr, exec_size, relative_rtti_info).unwrap();
 
                 let rtti = RTTIMatch {
                     name,

@@ -9,7 +9,7 @@ checksum = "bf8dcb5b4bbaa28653b647d8c77bd4ed40183b48882e130c1f1ffb73de069fd7"
 [[package]]
 name = "memory-rs"
 version = "0.1.4"
-source = "git+https://github.com/etra0/memory-rs#9ae4c739111f14ca30b6405d9747fd6a95958834"
+source = "git+https://github.com/etra0/memory-rs#0e51230b170c5c7020f30407cf8a16b545b976f3"
 dependencies = [
  "anyhow",
  "winapi",
