@@ -2,7 +2,7 @@ use memory_rs::internal::memory::scan_aob_all_matches;
 use memory_rs::internal::process_info::ProcessInfo;
 use memory_rs::try_winapi;
 use std::ffi::{CStr, CString};
-use std::io::{self, BufRead, Write};
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
@@ -25,7 +25,7 @@ impl std::fmt::Display for RTTIMatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}\t\t{:x}\t{:x?}",
+            "{}\t{:x}\t{:x?}",
             self.name, self.addr, self.possible_matches
         )
     }
@@ -94,8 +94,14 @@ fn get_rtti_values(lib: LPVOID) -> Result<()> {
 
     println!("Base path: {:?}", path);
 
-    path.push("offsets.txt");
-    let offsets_f = std::fs::File::create(path)?;
+    let game_name: String = unsafe {
+        let name: PathBuf = get_module_name(std::ptr::null_mut())?.into();
+        let name = name.file_name().ok_or("Couldn't get exec name")?;
+        String::from(name.to_string_lossy())
+
+    };
+
+    path.push(format!("offsets_{}.tsv", game_name));
 
     let total_addr = av_matches.len();
 
@@ -163,19 +169,15 @@ fn get_rtti_values(lib: LPVOID) -> Result<()> {
     }
     println!("All threads ended");
 
-    unsafe {
-        let a = (*Arc::into_raw(results)).lock()?;
-        for res in a.iter() {
-            writeln!(&offsets_f, "{}", res)?;
-        }
+    let offsets_f = std::fs::File::create(path)?;
+    let mut results = results.try_lock().unwrap();
+    (*results).sort_by(|a, b| a.name.partial_cmp(&b.name).unwrap());
+    for res in (*results).iter() {
+        writeln!(&offsets_f, "{}", res)?;
     }
 
     let diff = t.elapsed().as_secs_f32();
     println!("took {}", diff);
-
-    let mut buffer = String::new();
-    let stdin = io::stdin(); // We get `Stdin` here.
-    stdin.lock().read_line(&mut buffer).unwrap();
 
     Ok(())
 }
