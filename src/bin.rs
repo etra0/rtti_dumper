@@ -1,5 +1,5 @@
-use simple_injector::inject_dll;
 use memory_rs::external::process::Process;
+use simple_injector::inject_dll;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -14,7 +14,6 @@ fn main() {
     let mut dll = std::env::current_exe().unwrap();
     dll.pop();
     dll.push("dumper_lib.dll");
-
 
     inject_dll(&proc, &dll.to_string_lossy());
 }
