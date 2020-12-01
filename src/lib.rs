@@ -56,12 +56,6 @@ unsafe extern "system" fn wrapper(lib: LPVOID) -> u32 {
     0
 }
 
-fn resolve_path(path: &str) -> PathBuf {
-    let mut path: std::path::PathBuf = path.into();
-    path.pop();
-    path
-}
-
 unsafe fn get_module_name(lib: LPVOID) -> Result<String> {
     let mut buf: Vec<i8> = Vec::with_capacity(255);
 
@@ -76,39 +70,49 @@ unsafe fn get_module_name(lib: LPVOID) -> Result<String> {
     Ok(name)
 }
 
+/// Get DLL parent's path
+fn resolve_path(lib: LPVOID) -> Result<PathBuf> {
+    let mut path: std::path::PathBuf = unsafe { get_module_name(lib)?.into() };
+    path.pop();
+    Ok(path)
+}
+
+
 fn get_rtti_values(lib: LPVOID) -> Result<()> {
     unsafe {
         try_winapi!(AllocConsole());
     }
 
     let proc_inf = ProcessInfo::new(None)?;
-
-    let name = unsafe { get_module_name(lib)? };
-    let mut path = resolve_path(&name);
-
+    let mut path = resolve_path(lib)?;
     let av_signature_lambda = |x: &[u8]| -> bool { matches!(x, b".?AV") };
 
+    // Used to benchmark.
     let t = std::time::Instant::now();
-    let addr = scan_aob_all_matches(proc_inf.addr, proc_inf.size, av_signature_lambda, 4)?;
+
+    let av_matches = scan_aob_all_matches(proc_inf.addr, proc_inf.size, av_signature_lambda, 4)?;
 
     println!("Base path: {:?}", path);
 
     path.push("offsets.txt");
     let offsets_f = std::fs::File::create(path)?;
 
-    let total_addr = addr.len();
+    let total_addr = av_matches.len();
 
-    let splitted: Vec<Arc<Vec<usize>>> = addr
-        .chunks(addr.len() / 14)
+    let av_matches_splitted: Vec<Arc<Vec<usize>>> = av_matches
+        .chunks(av_matches.len() / 14)
         .map(|x| Arc::new(x.try_into().unwrap()))
         .collect();
 
+    // Store all the RTTIMatch results.
     let results = Arc::new(Mutex::new(Vec::new()));
+
+    // Counter to get some progress reporting.
     let total_revised = Arc::new(AtomicUsize::default());
 
     let mut handles = vec![];
 
-    for chunk in splitted {
+    for chunk in av_matches_splitted {
         let chunk = chunk.clone();
         let base_addr = proc_inf.addr;
         let exec_size = proc_inf.size;
@@ -122,10 +126,10 @@ fn get_rtti_values(lib: LPVOID) -> Result<()> {
                     name
                 };
 
-                let relative_locator: u32 = (*a - 0x10 - base_addr).try_into().unwrap();
-                let relative_allocator_aob: [u8; 4] =
-                    unsafe { std::mem::transmute(relative_locator) };
-                let lambda = move |x: &[u8]| -> bool { x == relative_allocator_aob };
+                let relative_rtti_info: u32 = (*a - 0x10 - base_addr).try_into().unwrap();
+                let relative_rtti_info_aob: [u8; 4] =
+                    unsafe { std::mem::transmute(relative_rtti_info) };
+                let lambda = move |x: &[u8]| -> bool { x == relative_rtti_info_aob };
                 let matches = scan_aob_all_matches(base_addr, exec_size, lambda, 4).unwrap();
 
                 let rtti = RTTIMatch {
@@ -141,14 +145,14 @@ fn get_rtti_values(lib: LPVOID) -> Result<()> {
     }
 
     handles.push(std::thread::spawn(move || loop {
-        let a = total_revised.load(Ordering::SeqCst);
+        let total_revised = total_revised.load(Ordering::SeqCst);
         println!(
             "Progress: {} / {} ({:.2}%)",
-            a,
+            total_revised,
             total_addr,
-            ((a) as f32) * 100. / (total_addr as f32)
+            (total_revised as f32) * 100. / (total_addr as f32)
         );
-        if a == total_addr {
+        if total_revised == total_addr {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(500));
