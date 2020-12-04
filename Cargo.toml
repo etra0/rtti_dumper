@@ -9,7 +9,8 @@ edition = "2018"
 [dependencies]
 memory-rs = { git = "https://github.com/etra0/memory-rs" }
 simple_injector = { git = "https://github.com/etra0/simple_injector" }
-winapi = { version = "0.3.8", features = ["winuser", "libloaderapi", "wincon", "consoleapi", "minwindef"] }
+winapi = { version = "0.3.8", features = ["winuser", "libloaderapi", "wincon", "consoleapi", "minwindef", "namedpipeapi", "fileapi", "std"] }
+clap = "2.33"
 
 [lib]
 crate-type = ["cdylib"]
