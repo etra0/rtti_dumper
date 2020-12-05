@@ -1,0 +1,37 @@
+name: Rust
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build
+      run: cargo build --release
+    - name: Pack Release files
+      run: |
+        Copy target/release/dumper_lib.dll ./dumper_lib.dll
+        Copy target/release/rtti_dumper.exe ./rtti_dumper.exe
+        tar -a -c -f rtti_dumper.zip dumper_lib.dll rtti_dumper.exe
+
+    - name: Set Release version
+      run: echo "TAG_VERSION=$(cargo run --release -- -V)" >> $env:GITHUB_ENV
+    - name: "Automatic Release"
+      uses: "marvinpinto/action-automatic-releases@latest"
+      with:
+        repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        automatic_release_tag: "${{ env.TAG_VERSION }}"
+        prerelease: false
+        title: "${{ env.TAG_VERSION }}"
+        files: |
+          rtti_dumper.zip
