@@ -79,7 +79,8 @@ unsafe extern "system" fn wrapper(lib: LPVOID) -> u32 {
 
     let n_proc = match get_arguments() {
         Ok(o) => o,
-        Err(_) => {
+        Err(e) => {
+            println!("{}", e);
             println!("Can't read from the pipe, so back to 4 threads.");
             4
         }
@@ -162,7 +163,9 @@ fn get_rtti_values(lib: LPVOID, n_proc: u16) -> Result<&'static str> {
     let results = Arc::new(Mutex::new(Vec::new()));
 
     // Counter to get some progress reporting.
-    let total_revised = Arc::new(AtomicUsize::default());
+    let total_revised = Arc::new(AtomicUsize::new(0));
+
+    let total_scans = Arc::new(AtomicUsize::new(0));
 
     let mut handles = vec![];
 
@@ -172,6 +175,7 @@ fn get_rtti_values(lib: LPVOID, n_proc: u16) -> Result<&'static str> {
         let exec_size = proc_inf.size;
         let results = results.clone();
         let total_revised = total_revised.clone();
+        let total_scans = total_scans.clone();
         handles.push(std::thread::spawn(move || {
             for a in chunk.iter() {
                 let name = {
@@ -184,12 +188,14 @@ fn get_rtti_values(lib: LPVOID, n_proc: u16) -> Result<&'static str> {
                     (*a - 0x10 - base_addr).try_into().expect("Overflow issue");
                 let matches = scan_aligned_value(base_addr, exec_size, relative_rtti_info)
                     .expect("Can't scan 1");
+                total_scans.fetch_add(1, Ordering::SeqCst);
 
                 let mut possible_matches = vec![];
                 for m in matches {
                     let results =
                         scan_aligned_value(base_addr, exec_size, m - 0xC).expect("Can't scan 2");
                     possible_matches.extend_from_slice(&results);
+                    total_scans.fetch_add(1, Ordering::SeqCst);
                 }
 
                 let rtti = RTTIMatch {
@@ -210,7 +216,8 @@ fn get_rtti_values(lib: LPVOID, n_proc: u16) -> Result<&'static str> {
         let time = std::time::Instant::now();
         loop {
             let total_revised = total_revised.load(Ordering::SeqCst);
-            let speed = (total_revised as f32 * exec_size) / time.elapsed().as_secs_f32();
+            let total_scans = total_scans.load(Ordering::SeqCst);
+            let speed = (total_scans as f32 * exec_size) / time.elapsed().as_secs_f32();
 
             println!(
                 "Progress: {} / {} ({:.2}%) @ {:.2} MB/s",

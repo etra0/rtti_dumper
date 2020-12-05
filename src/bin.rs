@@ -12,9 +12,7 @@ use clap::{App, Arg};
 /// Creates a Pipe which sole purpose is to tell the DLL how many threads
 /// it's supposed to use in order to do the scanning.
 fn create_pipe(nproc: u16) -> Result<(), Box<dyn std::error::Error>> {
-    let pipe_name = globals::PIPE_NAME;
-
-    let pipe_name = CString::new(pipe_name.as_bytes())?;
+    let pipe_name = CString::new(globals::PIPE_NAME.as_bytes())?;
 
     let h_pipe = unsafe {
         CreateNamedPipeA(
@@ -22,8 +20,8 @@ fn create_pipe(nproc: u16) -> Result<(), Box<dyn std::error::Error>> {
             winbase::PIPE_ACCESS_OUTBOUND,
             winbase::PIPE_TYPE_MESSAGE | winbase::PIPE_READMODE_MESSAGE | winbase::PIPE_WAIT,
             2,
-            512,
-            512,
+            globals::BUFFER_SIZE,
+            globals::BUFFER_SIZE,
             0,
             std::ptr::null_mut(),
         )
