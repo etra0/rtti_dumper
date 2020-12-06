@@ -1,20 +1,21 @@
 use memory_rs::external::process::Process;
 use simple_injector::inject_dll;
-use std::{ffi::CString, fs::File, io::Write};
 use std::os::windows::io::FromRawHandle;
-use winapi::um::winbase::{self, CreateNamedPipeA};
+use std::{ffi::CString, fs::File, io::Write};
 use winapi::um::handleapi;
 use winapi::um::namedpipeapi::ConnectNamedPipe;
+use winapi::um::winbase::{self, CreateNamedPipeA};
+
 mod globals;
 
-use clap::{Arg, App};
+use clap::{App, Arg};
+
+const BUFFER_SIZE: u32 = 512;
 
 /// Creates a Pipe which sole purpose is to tell the DLL how many threads
 /// it's supposed to use in order to do the scanning.
 fn create_pipe(nproc: u16) -> Result<(), Box<dyn std::error::Error>> {
-    let pipe_name = globals::PIPE_NAME;
-
-    let pipe_name = CString::new(pipe_name.as_bytes())?;
+    let pipe_name = CString::new(globals::PIPE_NAME.as_bytes())?;
 
     let h_pipe = unsafe {
         CreateNamedPipeA(
@@ -22,17 +23,20 @@ fn create_pipe(nproc: u16) -> Result<(), Box<dyn std::error::Error>> {
             winbase::PIPE_ACCESS_OUTBOUND,
             winbase::PIPE_TYPE_MESSAGE | winbase::PIPE_READMODE_MESSAGE | winbase::PIPE_WAIT,
             2,
-            512,
-            512,
+            BUFFER_SIZE,
+            BUFFER_SIZE,
             0,
-            std::ptr::null_mut())
+            std::ptr::null_mut(),
+        )
     };
 
     if h_pipe == handleapi::INVALID_HANDLE_VALUE {
         return Err("Couldn't create pipe".into());
     }
 
-    unsafe { ConnectNamedPipe(h_pipe, std::ptr::null_mut()); }
+    unsafe {
+        ConnectNamedPipe(h_pipe, std::ptr::null_mut());
+    }
 
     println!("Pipe connected");
 
@@ -52,15 +56,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .version(env!("CARGO_PKG_VERSION"))
         .author("Sebastián Aedo <sebastian.aedo@sansano.usm.cl>")
         .about("Tries to dump the virtual table function from the RTTI")
-        .arg(Arg::with_name("process")
-            .help("Name of the process to dump")
-            .required(true)
-            .value_name("PROCESS")
-            .index(1))
-        .arg(Arg::with_name("threads")
-            .short("t")
-            .long("threads")
-            .takes_value(true))
+        .arg(
+            Arg::with_name("process")
+                .help("Name of the process to dump")
+                .required(true)
+                .value_name("PROCESS")
+                .index(1),
+        )
+        .arg(
+            Arg::with_name("threads")
+                .short("t")
+                .long("threads")
+                .takes_value(true),
+        )
         .get_matches();
 
     let n_threads = matches.value_of("threads").unwrap_or("4");

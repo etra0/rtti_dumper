@@ -1,1 +1,1 @@
-pub static PIPE_NAME: &'static str = r"\\.\pipe\rtti_pipe";
+pub const PIPE_NAME: &str = r"\\.\pipe\rtti_pipe";

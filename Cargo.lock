@@ -65,7 +65,7 @@ checksum = "4d58d1b70b004888f764dfbf6a26a3b0342a1632d33968e4a179d8011c760614"
 [[package]]
 name = "memory-rs"
 version = "0.2.1"
-source = "git+https://github.com/etra0/memory-rs#5f7c5522d3216889886177dd6d1b2cd71c693ade"
+source = "git+https://github.com/etra0/memory-rs#331e5bbfe4447eb80eff8228aa196ae893cac7f4"
 dependencies = [
  "anyhow",
  "winapi",
@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "rtti-dumper"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "memory-rs",
