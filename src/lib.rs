@@ -33,7 +33,7 @@ impl std::fmt::Display for RTTIMatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}\t{:x}\t{:x?}",
+            "{}\t+{:x}\t{:x?}",
             self.name, self.addr, self.possible_matches
         )
     }
@@ -179,36 +179,44 @@ fn get_rtti_values(lib: LPVOID, n_proc: u16) -> Result<&'static str> {
         let total_revised = total_revised.clone();
         let total_scans = total_scans.clone();
         handles.push(std::thread::spawn(move || {
-            for a in chunk.iter() {
+            for &a in chunk.iter() {
                 let name = {
-                    let lossy = unsafe { CStr::from_ptr((*a) as _) };
+                    let lossy = unsafe { CStr::from_ptr(a as _) };
                     let name = String::from(lossy.to_string_lossy());
                     name
                 };
 
-                let relative_rtti_info: u32 = (*a - 0x10 - region.start_address)
+                // We don't need to store lambda functions
+                if name.contains("lambda") { total_revised.fetch_add(1, Ordering::Relaxed); continue; }
+
+                let relative_rtti_info: u32 = (a - 0x10 - region.start_address)
                     .try_into()
                     .expect("Overflow issue");
                 let matches = region
                     .scan_aligned_value(relative_rtti_info)
                     .expect("Can't scan 1");
-                total_scans.fetch_add(1, Ordering::SeqCst);
+                total_scans.fetch_add(1, Ordering::Relaxed);
 
                 let mut possible_matches = vec![];
                 for m in matches {
                     let results = region.scan_aligned_value(m - 0xC).expect("Can't scan 2");
                     possible_matches.extend_from_slice(&results);
-                    total_scans.fetch_add(1, Ordering::SeqCst);
+                    total_scans.fetch_add(1, Ordering::Relaxed);
                 }
+
+                let possible_matches = possible_matches
+                    .iter()
+                    .map(|&x| x - region.start_address)
+                    .collect();
 
                 let rtti = RTTIMatch {
                     name,
-                    addr: (*a),
+                    addr: a - region.start_address,
                     possible_matches,
                 };
                 let mut results = results.lock().expect("Can't lock");
                 results.push(rtti);
-                total_revised.fetch_add(1, Ordering::SeqCst);
+                total_revised.fetch_add(1, Ordering::Relaxed);
             }
         }));
     }
@@ -218,8 +226,8 @@ fn get_rtti_values(lib: LPVOID, n_proc: u16) -> Result<&'static str> {
     handles.push(std::thread::spawn(move || {
         let time = std::time::Instant::now();
         loop {
-            let total_revised = total_revised.load(Ordering::SeqCst);
-            let total_scans = total_scans.load(Ordering::SeqCst);
+            let total_revised = total_revised.load(Ordering::Relaxed);
+            let total_scans = total_scans.load(Ordering::Relaxed);
             let speed = (total_scans as f32 * exec_size) / time.elapsed().as_secs_f32();
 
             println!(
