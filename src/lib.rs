@@ -1,4 +1,3 @@
-use globals::Parameters;
 use memory_rs::internal::memory::resolve_module_path;
 use memory_rs::internal::process_info::ProcessInfo;
 use memory_rs::try_winapi;
@@ -104,20 +103,6 @@ unsafe extern "system" fn wrapper(lib: LPVOID) -> u32 {
     0
 }
 
-unsafe fn get_module_name(lib: LPVOID) -> Result<String> {
-    let mut buf: Vec<i8> = Vec::with_capacity(255);
-
-    try_winapi!(libloaderapi::GetModuleFileNameA(
-        lib as _,
-        buf.as_mut_ptr(),
-        255
-    ));
-    let name = CStr::from_ptr(buf.as_ptr());
-    let name = String::from(name.to_str()?);
-
-    Ok(name)
-}
-
 fn get_rtti_values(lib: LPVOID, params: globals::Parameters) -> Result<&'static str> {
     let proc_inf = ProcessInfo::new(None)?;
 
@@ -132,7 +117,7 @@ fn get_rtti_values(lib: LPVOID, params: globals::Parameters) -> Result<&'static 
     let av_matches = region.scan_aob_all_matches(av_signature_lambda, 4)?;
 
     let game_name: String = unsafe {
-        let name: PathBuf = get_module_name(std::ptr::null_mut())?.into();
+        let name: PathBuf = resolve_module_path(std::ptr::null_mut())?;
         let name = name.file_name().ok_or("Couldn't get exec name")?;
         String::from(name.to_string_lossy())
     };
