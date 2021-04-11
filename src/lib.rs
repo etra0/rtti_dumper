@@ -18,7 +18,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// This struct will contain the basic information about the RTTI when
 /// the scan_aob gets a match.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct RTTIMatch {
     /// Name of the RTTI.
     name: String,
@@ -164,6 +164,7 @@ fn get_rtti_values(lib: LPVOID, params: globals::Parameters) -> Result<&'static 
         let total_revised = total_revised.clone();
         let total_scans = total_scans.clone();
         handles.push(std::thread::spawn(move || {
+            let mut  local_results = vec![];
             for &a in chunk.iter() {
                 let name = {
                     let lossy = unsafe { CStr::from_ptr(a as _) };
@@ -201,10 +202,12 @@ fn get_rtti_values(lib: LPVOID, params: globals::Parameters) -> Result<&'static 
                     addr: a - region.start_address,
                     possible_matches,
                 };
-                let mut results = results.lock().expect("Can't lock");
-                results.push(rtti);
+                local_results.push(rtti);
                 total_revised.fetch_add(1, Ordering::Relaxed);
             }
+
+            let mut results = results.lock().expect("Can't lock");
+            results.extend_from_slice(&local_results);
         }));
     }
 
