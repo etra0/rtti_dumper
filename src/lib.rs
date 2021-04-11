@@ -1,6 +1,8 @@
+use globals::Parameters;
 use memory_rs::internal::memory::resolve_module_path;
 use memory_rs::internal::process_info::ProcessInfo;
 use memory_rs::try_winapi;
+use serde::Serialize;
 use std::convert::TryInto;
 use std::ffi::{CStr, CString};
 use std::io::{BufReader, Read, Write};
@@ -18,6 +20,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// This struct will contain the basic information about the RTTI when
 /// the scan_aob gets a match.
+#[derive(Serialize)]
 struct RTTIMatch {
     /// Name of the RTTI.
     name: String,
@@ -51,7 +54,7 @@ fn show_message(msg: &str, is_err: bool) {
 }
 
 /// Extract the number of arguments from the pipe created by the injector.
-fn get_arguments() -> Result<u16> {
+fn get_arguments() -> Result<globals::Parameters> {
     let pipe_name = globals::PIPE_NAME;
     dbg!(&pipe_name);
 
@@ -69,24 +72,24 @@ fn get_arguments() -> Result<u16> {
 
     buf_reader.read_to_string(&mut contents)?;
 
-    let n_proc: u16 = contents.parse()?;
+    let params: globals::Parameters = serde_json::from_str(&contents)?;
 
-    Ok(n_proc)
+    Ok(params)
 }
 
 unsafe extern "system" fn wrapper(lib: LPVOID) -> u32 {
     AllocConsole();
 
-    let n_proc = match get_arguments() {
+    let params = match get_arguments() {
         Ok(o) => o,
         Err(e) => {
             println!("{}", e);
             println!("Can't read from the pipe, so back to 4 threads.");
-            4
+            globals::Parameters::default()
         }
     };
 
-    match get_rtti_values(lib, n_proc) {
+    match get_rtti_values(lib, params) {
         Ok(o) => {
             show_message(o, false);
         }
@@ -115,7 +118,7 @@ unsafe fn get_module_name(lib: LPVOID) -> Result<String> {
     Ok(name)
 }
 
-fn get_rtti_values(lib: LPVOID, n_proc: u16) -> Result<&'static str> {
+fn get_rtti_values(lib: LPVOID, params: globals::Parameters) -> Result<&'static str> {
     let proc_inf = ProcessInfo::new(None)?;
 
     let region = Arc::new(proc_inf.region);
@@ -134,7 +137,6 @@ fn get_rtti_values(lib: LPVOID, n_proc: u16) -> Result<&'static str> {
         String::from(name.to_string_lossy())
     };
 
-    path.push(format!("offsets_{}.tsv", game_name));
 
     let total_addr = av_matches.len();
 
@@ -146,7 +148,7 @@ fn get_rtti_values(lib: LPVOID, n_proc: u16) -> Result<&'static str> {
     // is less than 100, since it doesn't worth the overhead.
     let mut n_threads = 1;
     if total_addr >= 100 {
-        n_threads = n_proc as _;
+        n_threads = params.threads as _;
     }
 
     let chunk_size = if n_threads > 1 {
@@ -189,9 +191,8 @@ fn get_rtti_values(lib: LPVOID, n_proc: u16) -> Result<&'static str> {
                 // We don't need to store lambda functions
                 if name.contains("lambda") { total_revised.fetch_add(1, Ordering::Relaxed); continue; }
 
-                let relative_rtti_info: u32 = (a - 0x10 - region.start_address)
-                    .try_into()
-                    .expect("Overflow issue");
+                let relative_rtti_info: u32 = (a - 0x10 - region.start_address) as u32;
+
                 let matches = region
                     .scan_aligned_value(relative_rtti_info)
                     .expect("Can't scan 1");
@@ -250,11 +251,19 @@ fn get_rtti_values(lib: LPVOID, n_proc: u16) -> Result<&'static str> {
 
     println!("All threads ended");
 
-    let offsets_f = std::fs::File::create(path)?;
     let mut results = results.try_lock().expect("Can't lock 2");
     (*results).sort_by(|a, b| a.name.partial_cmp(&b.name).expect("Cant sort"));
-    for res in (*results).iter() {
-        writeln!(&offsets_f, "{}", res)?;
+
+    path.push(format!("offsets_{}.{}", game_name, if params.use_json { "json" } else { "tsv" }));
+    let offsets_f = std::fs::File::create(path)?;
+
+    if params.use_json {
+        let result = serde_json::to_string(&(*results))?;
+        write!(&offsets_f, "{}", result)?;
+    } else {
+        for value in results.iter() {
+            writeln!(&offsets_f, "{}", value)?;
+        }
     }
 
     let diff = t.elapsed().as_secs_f32();
