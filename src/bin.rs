@@ -12,9 +12,10 @@ use clap::{App, Arg};
 
 const BUFFER_SIZE: u32 = 512;
 
+
 /// Creates a Pipe which sole purpose is to tell the DLL how many threads
 /// it's supposed to use in order to do the scanning.
-fn create_pipe(nproc: u16) -> Result<(), Box<dyn std::error::Error>> {
+fn create_pipe(params: globals::Parameters) -> Result<(), Box<dyn std::error::Error>> {
     let pipe_name = CString::new(globals::PIPE_NAME.as_bytes())?;
 
     let h_pipe = unsafe {
@@ -40,7 +41,7 @@ fn create_pipe(nproc: u16) -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Pipe connected");
 
-    let msg = format!("{}", nproc);
+    let msg = serde_json::to_string(&params)?;
     let msg = CString::new(msg.as_bytes())?;
 
     let mut pipe_file = unsafe { File::from_raw_handle(h_pipe) };
@@ -69,9 +70,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .long("threads")
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("json")
+                .short("j")
+                .long("json")
+                .takes_value(false)
+        )
         .get_matches();
 
     let n_threads = matches.value_of("threads").unwrap_or("4");
+    let use_json = matches.is_present("json");
+
     let proc_name = matches.value_of("process").unwrap();
 
     let n_threads: u16 = n_threads.parse()?;
@@ -83,7 +92,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     inject_dll(&proc, &dll.to_string_lossy());
 
-    create_pipe(n_threads)?;
+    let params = globals::Parameters { threads: n_threads, use_json };
+    create_pipe(params)?;
 
     Ok(())
 }
