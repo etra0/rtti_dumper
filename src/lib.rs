@@ -1,6 +1,5 @@
 use memory_rs::internal::memory::resolve_module_path;
 use memory_rs::internal::process_info::ProcessInfo;
-use memory_rs::try_winapi;
 use serde::Serialize;
 use std::convert::TryInto;
 use std::ffi::{CStr, CString};
@@ -9,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::{atomic::AtomicUsize, atomic::Ordering, Arc, Mutex};
 use winapi::shared::minwindef::LPVOID;
 use winapi::um::consoleapi::AllocConsole;
-use winapi::um::libloaderapi::{self, FreeLibraryAndExitThread};
+use winapi::um::libloaderapi::FreeLibraryAndExitThread;
 use winapi::um::wincon::FreeConsole;
 use winapi::um::winuser::MessageBoxA;
 
@@ -122,7 +121,6 @@ fn get_rtti_values(lib: LPVOID, params: globals::Parameters) -> Result<&'static 
         String::from(name.to_string_lossy())
     };
 
-
     let total_addr = av_matches.len();
 
     if total_addr == 0 {
@@ -174,7 +172,10 @@ fn get_rtti_values(lib: LPVOID, params: globals::Parameters) -> Result<&'static 
                 };
 
                 // We don't need to store lambda functions
-                if name.contains("lambda") { total_revised.fetch_add(1, Ordering::Relaxed); continue; }
+                if name.contains("lambda") {
+                    total_revised.fetch_add(1, Ordering::Relaxed);
+                    continue;
+                }
 
                 let relative_rtti_info: u32 = (a - 0x10 - region.start_address) as u32;
 
@@ -239,7 +240,11 @@ fn get_rtti_values(lib: LPVOID, params: globals::Parameters) -> Result<&'static 
     let mut results = results.try_lock().expect("Can't lock 2");
     (*results).sort_by(|a, b| a.name.partial_cmp(&b.name).expect("Cant sort"));
 
-    path.push(format!("offsets_{}.{}", game_name, if params.use_json { "json" } else { "tsv" }));
+    path.push(format!(
+        "offsets_{}.{}",
+        game_name,
+        if params.use_json { "json" } else { "tsv" }
+    ));
     let offsets_f = std::fs::File::create(path)?;
 
     if params.use_json {

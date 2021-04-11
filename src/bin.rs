@@ -12,7 +12,6 @@ use clap::{App, Arg};
 
 const BUFFER_SIZE: u32 = 512;
 
-
 /// Creates a Pipe which sole purpose is to tell the DLL how many threads
 /// it's supposed to use in order to do the scanning.
 fn create_pipe(params: globals::Parameters) -> Result<(), Box<dyn std::error::Error>> {
@@ -74,7 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Arg::with_name("json")
                 .short("j")
                 .long("json")
-                .takes_value(false)
+                .takes_value(false),
         )
         .get_matches();
 
@@ -92,7 +91,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     inject_dll(&proc, &dll.to_string_lossy());
 
-    let params = globals::Parameters { threads: n_threads, use_json };
+    let params = globals::Parameters {
+        threads: n_threads,
+        use_json,
+    };
     create_pipe(params)?;
 
     Ok(())
