@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::{atomic::AtomicUsize, atomic::Ordering, Arc};
 use winapi::shared::minwindef::LPVOID;
 use winapi::um::consoleapi::AllocConsole;
-use winapi::um::libloaderapi::FreeLibraryAndExitThread;
+use winapi::um::libloaderapi::{self, FreeLibraryAndExitThread};
 use winapi::um::wincon::FreeConsole;
 use winapi::um::winuser::MessageBoxA;
 
@@ -80,6 +80,20 @@ unsafe extern "system" fn wrapper(lib: LPVOID) -> u32 {
     0
 }
 
+unsafe fn get_module_name(lib: LPVOID) -> Result<String> {
+    let mut buf = [0_u8; 255];
+
+    memory_rs::try_winapi!(libloaderapi::GetModuleFileNameA(
+        lib as _,
+        buf.as_mut_ptr() as *mut i8,
+        255
+    ));
+    let null_terminator = buf.iter().position(|&x| x == 0).unwrap();
+    let name = String::from_utf8_lossy(&buf[..null_terminator]).to_string();
+
+    Ok(name)
+}
+
 fn get_rtti_values(lib: LPVOID, params: globals::Parameters) -> Result<&'static str> {
     let proc_inf = ProcessInfo::new(None)?;
 
@@ -94,7 +108,7 @@ fn get_rtti_values(lib: LPVOID, params: globals::Parameters) -> Result<&'static 
     let av_matches = region.scan_aob_all_matches(av_signature_lambda, 4)?;
 
     let game_name: String = unsafe {
-        let name: PathBuf = resolve_module_path(std::ptr::null_mut())?;
+        let name: PathBuf = get_module_name(std::ptr::null_mut())?.into();
         let name = name.file_name().ok_or("Couldn't get exec name")?;
         String::from(name.to_string_lossy())
     };
