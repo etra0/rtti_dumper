@@ -8,6 +8,7 @@ use std::sync::{
 
 /// This struct will contain the basic information about the RTTI when
 /// the scan_aob gets a match.
+#[allow(non_snake_case)]
 #[derive(Serialize, Clone)]
 pub struct RTTIMatch {
     /// Name of the RTTI.

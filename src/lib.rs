@@ -170,7 +170,7 @@ fn get_rtti_values(lib: LPVOID, params: globals::Parameters) -> Result<&'static 
         .par_iter()
         .filter_map(|&x| {
             let res = scan_rtti(x, &region, &total_revised, &total_scans);
-            if !res.is_ok() {
+            if res.is_err() {
                 println!("{} returned an err", x);
             }
 
