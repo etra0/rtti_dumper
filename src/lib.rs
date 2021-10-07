@@ -95,7 +95,15 @@ unsafe fn get_module_name(lib: LPVOID) -> Result<String> {
 }
 
 fn get_rtti_values(lib: LPVOID, params: globals::Parameters) -> Result<&'static str> {
-    let proc_inf = ProcessInfo::new(params.proc_target.as_deref())?;
+    let proc_inf = ProcessInfo::new(params.proc_target.as_deref()).map_err(|_| {
+        
+        let mut response = String::from("Something went wrong with the process.");
+        if let Some(ref proc_name) = params.proc_target {
+            response.push_str(&format!("\nCheck the name {} is correct and it's loaded!", proc_name));
+        }
+
+        return response
+    })?;
 
     let region = Arc::new(proc_inf.region);
 
