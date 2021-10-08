@@ -75,10 +75,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .long("json")
                 .takes_value(false),
         )
+        .arg(
+            Arg::with_name("proc_target")
+                .short("p")
+                .long("proc_target")
+                .takes_value(true)
+                .help("Name of the executable to dump. This is useful if you want to dump a DLL for example.")
+        )
         .get_matches();
 
     let n_threads = matches.value_of("threads").unwrap_or("4");
     let use_json = matches.is_present("json");
+    let proc_target = matches.value_of("proc_target").map(|x| x.to_string());
 
     let proc_name = matches.value_of("process").unwrap();
 
@@ -94,6 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let params = globals::Parameters {
         threads: n_threads,
         use_json,
+        proc_target
     };
     create_pipe(params)?;
 

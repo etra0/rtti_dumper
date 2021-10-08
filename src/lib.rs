@@ -95,17 +95,18 @@ unsafe fn get_module_name(lib: LPVOID) -> Result<String> {
 }
 
 fn get_rtti_values(lib: LPVOID, params: globals::Parameters) -> Result<&'static str> {
-    let proc_inf = ProcessInfo::new(None)?;
+    let proc_inf = ProcessInfo::new(params.proc_target.as_deref())?;
 
     let region = Arc::new(proc_inf.region);
 
     let mut path = unsafe { resolve_module_path(lib)? };
     let av_signature_lambda = |x: &[u8]| -> bool { matches!(x, b".?AV") };
+    let mp = memory_rs::internal::memory::MemoryPattern::new(4, av_signature_lambda);
 
     // Used to benchmark.
     let t = std::time::Instant::now();
 
-    let av_matches = region.scan_aob_all_matches(av_signature_lambda, 4)?;
+    let av_matches = region.scan_aob_all_matches(&mp)?;
 
     let game_name: String = unsafe {
         let name: PathBuf = get_module_name(std::ptr::null_mut())?.into();

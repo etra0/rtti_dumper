@@ -5,6 +5,7 @@ pub const PIPE_NAME: &str = r"\\.\pipe\rtti_pipe";
 pub struct Parameters {
     pub threads: u16,
     pub use_json: bool,
+    pub proc_target: Option<String>
 }
 
 impl Default for Parameters {
@@ -12,6 +13,7 @@ impl Default for Parameters {
         Parameters {
             threads: 4,
             use_json: false,
+            proc_target: None
         }
     }
 }
